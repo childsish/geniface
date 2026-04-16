@@ -2,17 +2,18 @@
 
 ## 1. Overview
 
-`geniface` is a lightweight interface generation and orchestration adapter layer that:
+`geniface` is a lightweight interface generation layer that:
 
 - Treats **Python functions as the primary unit of computation**
-- Derives **CLI, REST, UI, and pipeline interfaces** from a single source of truth
-- Delegates execution to external systems (e.g. Flyte, Dagster, KFP)
-- Avoids implementing its own orchestration engine
+- Derives **multiple execution interfaces** (CLI, HTTP, UI, composition) from a single definition
+- Adapts functions to different execution environments
+- Avoids implementing its own execution or scheduling system
 
 The system is designed for:
-- Pipeline-centric workflows
-- Rapid component development
-- Multi-environment execution (local, SLURM, Kubernetes)
+
+- Rapid function development and testing
+- Consistent interaction patterns across environments
+- Reuse of logic across local, service, and distributed contexts
 
 ---
 
@@ -20,13 +21,13 @@ The system is designed for:
 
 ### 2.1 Single Source of Truth
 
-The canonical definition of a component is:
+The canonical definition of a unit is:
 
 - Function signature (required)
-- Optional schema (e.g. Pydantic)
+- Optional schema
 - Optional metadata
 
-Everything else is derived.
+All interfaces are derived from this definition.
 
 ---
 
@@ -35,57 +36,60 @@ Everything else is derived.
 | Concern | Responsibility |
 |--------|----------------|
 | Function | Execution logic |
-| Schema | Interface contract |
-| IR | Normalized representation |
+| Schema | Input/output structure |
+| Specification | Normalized representation |
 | Generator | Interface derivation |
-| Backend | Execution |
+| Runtime | Execution |
 
 ---
 
-### 2.3 No Orchestration Logic
+### 2.3 No Execution Ownership
 
 `geniface`:
-- DOES NOT schedule tasks
-- DOES NOT manage execution state
-- DOES NOT manage resources directly
+
+- DOES NOT schedule execution
+- DOES NOT manage runtime state
+- DOES NOT manage infrastructure
 
 It:
-- Generates adapters for orchestrators
+
+- Generates interface adapters
 - Produces portable definitions
 
 ---
 
-### 2.4 Stateless Execution Model
+### 2.4 Stateless Model
 
-- Components must be treated as **stateless**
-- No shared memory between pipeline steps
-- All state must be:
-  - passed as inputs/outputs
-  - or externalized (storage/services)
+- Functions are treated as **stateless**
+- No shared memory across executions
+- All data must be:
+  - passed explicitly
+  - or externalized
 
 ---
 
 ## 3. Developer Workflow
 
-Target development loop:
+Target loop:
 
-1. Write a function
-2. Test using CLI (`geniface run`)
-3. Integrate into pipeline
-4. Repeat
+1. Write a function  
+2. Test via CLI  
+3. Compose with other functions  
+4. Repeat  
 
 Constraints:
-- CLI execution must match pipeline execution
-- No pipeline-specific wrapping required
+
+- All interfaces must execute the same logic
+- No environment-specific rewrites
 
 ---
 
-## 4. Component Model
+## 4. Function Model
 
-### 4.1 Minimal Component
+### 4.1 Minimal Example
 
 ```
-def ocr(document: Path) -> str:
+def transform(input: str) -> str:
     ...
 ```
 
@@ -94,46 +98,41 @@ def ocr(document: Path) -> str:
 ### 4.2 Optional Schema
 
 ```
-class OCRInput(BaseModel):
-    document: Path = Field(..., description="Input file")
+class InputModel(BaseModel):
+    input: str = Field(..., description="Input value")
 ```
 
 Schemas provide:
+
 - validation
-- JSON Schema
-- UI metadata
-- OpenAPI compatibility
+- structured metadata
+- compatibility with external tools
 
 ---
 
-### 4.3 Component Specification
-
-Internal representation:
+### 4.3 Function Specification
 
 ```
-ComponentIR:
+FunctionSpec:
     name: str
-    description: str | None
-    inputs: List[FieldIR]
-    outputs: List[FieldIR]
-    execution: Dict[str, Any]
+    inputs: List[FieldSpec]
+    output: FieldSpec
+    metadata: Dict[str, Any]
     fn: Callable
 ```
 
 ---
 
-### 4.4 Field Representation
+### 4.4 Field Specification
 
 ```
-FieldIR:
+FieldSpec:
     name: str
-    type: str                  # normalized type
+    type: str
     python_type: Any
     required: bool
     default: Any
     description: str | None
-    examples: List[Any] | None
-    enum: List[Any] | None
     constraints: Dict
 ```
 
@@ -153,51 +152,42 @@ Normalized types:
 
 ---
 
-## 5. Pipeline Model
+## 5. Composition Model
 
-### 5.1 Pipeline IR
+### 5.1 Sequence Representation
 
 ```
-PipelineIR:
-    name: str
-    description: str | None
-    inputs: List[PipelineInputIR]
-    outputs: List[PipelineOutputIR]
-    nodes: List[NodeIR]
+SequenceSpec:
+    steps: List[StepSpec]
 ```
 
 ---
 
-### 5.2 Node Representation
+### 5.2 Step Representation
 
 ```
-NodeIR:
-    id: str
-    component: ComponentIR
-    inputs: Dict[str, InputBindingIR]
+StepSpec:
+    name: str
+    fn: Callable
+    inputs: Dict[str, str]
 ```
 
 ---
 
 ### 5.3 Input Binding
 
-```
-InputBindingIR:
-    kind: "literal" | "pipeline_input" | "node_output"
-    value: Any
-    source_input: str | None
-    source_node: str | None
-    source_output: str | None
-```
+- literal value
+- external input
+- output of previous step
 
 ---
 
 ### 5.4 Constraints
 
-- DAG must be acyclic
-- All inputs must be bound
-- Types must be compatible
-- Node IDs must be unique
+- no cycles
+- unique step names
+- all inputs must resolve
+- types should be compatible
 
 ---
 
@@ -212,51 +202,49 @@ geniface run module:function --arg value
 ```
 
 Requirements:
-- auto-generated from IR
-- consistent with REST/pipeline inputs
-- fast startup
+
+- derived from function specification
+- consistent argument mapping
+- minimal startup overhead
 
 ---
 
-### 6.2 REST API
+### 6.2 HTTP Interface
 
 Generated via FastAPI:
 
-- POST endpoint per component
-- OpenAPI schema from models
-- validation via schema
+- POST endpoint per function
+- JSON input/output
+- automatic validation (optional)
 
 ---
 
 ### 6.3 UI
 
-Generated from JSON Schema:
+Derived from schema:
 
 - form-based input
-- validation rules
+- validation hints
 - field descriptions
 
 ---
 
-### 6.4 Pipelines
+### 6.4 Composition Execution
 
-Supported backends:
-
-- Flyte (primary)
-- Kubeflow Pipelines (optional)
-- Dagster (recommended abstraction layer)
+- sequential execution of steps
+- deterministic order
+- no parallelism required
 
 ---
 
 ## 7. Generator Interfaces
 
-### 7.1 CLI Interface
+### 7.1 CLI
 
 ```
-geniface build module:function
 geniface run module:function
+geniface build module:function
 geniface serve module
-geniface build module --target flyte
 ```
 
 ---
@@ -266,16 +254,16 @@ geniface build module --target flyte
 ```
 from geniface import build
 
-build(component_spec)
+build(function_spec)
 ```
 
 ---
 
-### 7.3 Decorator Registration
+### 7.3 Optional Registration
 
 ```
-@component
-def ocr(...):
+@register
+def transform(...):
     ...
 ```
 
@@ -285,17 +273,17 @@ def ocr(...):
 
 ### 8.1 Default Behavior
 
-- Generate interfaces **at runtime**
-- Avoid writing files
+- Generate interfaces at runtime
+- Avoid persistent artifacts
 
 ---
 
-### 8.2 Optional Artifacts
+### 8.2 Optional Output
 
-Generate only when needed:
+Generate files only when needed:
 
-- pipeline specs (YAML, etc.)
-- deployment artifacts
+- wrappers
+- service entrypoints
 
 Output location:
 
@@ -308,66 +296,53 @@ Output location:
 ### 8.3 Repository Policy
 
 Generated code:
-- should NOT be committed
-- must be reproducible
 
-Exceptions:
-- required deployment artifacts
+- should not be committed
+- must be reproducible
 
 ---
 
 ## 9. Execution Semantics
 
-### 9.1 Task Isolation
+### 9.1 Isolation
 
-- each pipeline node = independent process/container
+- each execution is independent
 - no shared memory
-- no VRAM persistence across nodes
+- no persistent state
 
 ---
 
-### 9.2 GPU / VRAM Handling
+### 9.2 Resource Constraints
 
-Constraints:
-- VRAM tied to process lifetime
-- cannot persist across tasks
-
-Implications:
-- model loading must occur per task
-- or inside a long-lived service
+- memory and compute are external concerns
+- execution context defines limits
 
 ---
 
-### 9.3 Model Execution Patterns
+### 9.3 Execution Patterns
 
-Supported patterns:
+Supported:
 
-1. Load per task (default)
-2. Load + run in same task (preferred for GPU)
-3. Artifact-based model passing
-4. External model service
+1. direct execution
+2. batched execution within a single call
+3. external service execution
 
 ---
 
 ## 10. Execution Metadata
 
-Execution hints:
+Optional hints:
 
 ```
 execution = {
     "cpu": int,
     "memory": str,
     "gpu": int,
-    "timeout": int,
-    "cache": bool,
-    "image": str
+    "timeout": int
 }
 ```
 
-Mapped by backend to:
-- SLURM
-- Kubernetes
-- Flyte/KFP
+Used by external systems.
 
 ---
 
@@ -375,28 +350,25 @@ Mapped by backend to:
 
 Target environments:
 
-- Local (dev)
-- SLURM (dev/compute)
-- Kubernetes (prod)
+- local
+- batch systems
+- containerized systems
 
 ---
 
 ### Requirements
 
-- no local filesystem assumptions
-- use shared/object storage
-- containerized or reproducible environments
-- resource abstraction (CPU/GPU)
+- no reliance on local filesystem
+- explicit data handling
+- reproducible environments
 
 ---
 
-## 12. Storage Model
+## 12. Data Handling
 
-- Inputs/outputs must be serializable
-- Avoid local disk reliance
-- Prefer:
-  - S3 / GCS / MinIO
-  - artifact systems
+- inputs/outputs must be serializable
+- avoid implicit state
+- support external storage references
 
 ---
 
@@ -404,11 +376,11 @@ Target environments:
 
 System must validate:
 
-- pipeline structure
-- input bindings
-- type compatibility
-- missing references
+- function structure
+- input resolution
+- composition correctness
 - cycles
+- missing dependencies
 
 ---
 
@@ -416,11 +388,11 @@ System must validate:
 
 Future extensions:
 
-- artifact typing (model, dataset, etc.)
+- richer type system
+- structured artifacts
 - conditional execution
-- parallel/map nodes
-- sub-pipelines
-- streaming support
+- parallel execution
+- nested compositions
 
 ---
 
@@ -428,20 +400,19 @@ Future extensions:
 
 `geniface` will NOT:
 
-- implement a scheduler
-- manage distributed execution
-- manage cluster resources
-- provide persistent runtime state
-- replace Flyte/KFP/Dagster
+- implement scheduling
+- manage distributed systems
+- manage infrastructure
+- provide persistent runtime services
 
 ---
 
-## 16. Key Design Constraints
+## 16. Key Constraints
 
-- IR must remain backend-agnostic
-- CLI/REST/UI must be consistent
-- generator must be deterministic
-- function execution must be identical across interfaces
+- specification must be backend-agnostic
+- interfaces must be consistent
+- behavior must be deterministic
+- execution must be identical across interfaces
 
 ---
 
@@ -449,15 +420,14 @@ Future extensions:
 
 `geniface` is:
 
-- a **contract-first interface generator**
-- built around **functions + schemas**
-- producing **multi-surface interfaces**
-- targeting **pipeline composition**
-- while delegating execution to **external orchestrators**
+- a **function-centric interface generator**
+- based on **introspection and optional schemas**
+- producing **multiple interaction surfaces**
+- enabling **composition without tight coupling**
 
 Primary success criteria:
 
 - minimal developer friction
-- consistent interfaces
+- consistent behavior
 - portability across environments
-- clean separation between definition and execution
+- clear separation between definition and execution

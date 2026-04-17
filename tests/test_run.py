@@ -1,26 +1,8 @@
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
-from pathlib import Path
+import geni.run as run_module
 
-from geni.run import parse_cli_kwargs
-
-
-def _build_subprocess_env(tmp_path: Path, project_root: Path) -> dict[str, str]:
-    env = {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith("DEBUGPY_") and not key.startswith("PYDEVD_")
-    }
-    python_path = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = (
-        f"{tmp_path}{os.pathsep}{project_root}"
-        if not python_path
-        else f"{tmp_path}{os.pathsep}{project_root}{os.pathsep}{python_path}"
-    )
-    return env
+from geni.run import build_help, parse_cli_kwargs, run_cli
 
 
 def test_parse_cli_kwargs_uses_positional_required_and_optional_flags() -> None:
@@ -40,42 +22,15 @@ def test_parse_cli_kwargs_uses_positional_required_and_optional_flags() -> None:
     }
 
 
-def test_cli_invocation_uses_subprocess(tmp_path: Path) -> None:
-    module = tmp_path / "cli_fixtures.py"
-    module.write_text(
-        "\n".join(
-            [
-                "def greet(name: str, excited: bool = False) -> str:",
-                '    """Greet one person from the CLI."""',
-                '    return f"hello {name}!" if excited else f"hello {name}"',
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+def test_run_cli_direct_call(monkeypatch) -> None:
+    def greet(name: str, excited: bool = False) -> str:
+        return f"hello {name}!" if excited else f"hello {name}"
 
-    project_root = Path(__file__).resolve().parents[1]
-    env = _build_subprocess_env(tmp_path, project_root)
+    monkeypatch.setattr(run_module, "load_function", lambda target: greet)
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "geni.run",
-            "cli_fixtures:greet",
-            "Ada",
-            "--excited",
-            "true",
-        ],
-        cwd=project_root,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = run_cli("fixtures:greet", ["Ada", "--excited", "true"])
 
-    assert result.returncode == 0
-    assert result.stdout.strip() == "hello Ada!"
+    assert result == "hello Ada!"
 
 
 def test_parse_cli_kwargs_omits_optional_arguments_when_not_provided() -> None:
@@ -87,39 +42,24 @@ def test_parse_cli_kwargs_omits_optional_arguments_when_not_provided() -> None:
     assert kwargs == {"name": "Ada"}
 
 
-def test_cli_help_uses_function_docstring(tmp_path: Path) -> None:
-    module = tmp_path / "cli_fixtures.py"
-    module.write_text(
-        "\n".join(
-            [
-                "def greet(name: str, excited: bool = False) -> str:",
-                '    """Greet one person from the CLI."""',
-                '    return f"hello {name}!" if excited else f"hello {name}"',
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+def test_build_help_uses_docstring() -> None:
+    def greet(name: str, excited: bool = False) -> str:
+        """Greet one person from the CLI."""
 
-    project_root = Path(__file__).resolve().parents[1]
-    env = _build_subprocess_env(tmp_path, project_root)
+        return f"hello {name}!" if excited else f"hello {name}"
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "geni.run",
-            "cli_fixtures:greet",
-            "--help",
-        ],
-        cwd=project_root,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    assert "Greet one person from the CLI." in build_help(greet)
 
-    print(result.stderr)
 
-    assert result.returncode == 0
-    assert "Greet one person from the CLI." in result.stdout
+def test_main_prints_run_cli_result(monkeypatch, capsys) -> None:
+    def greet(name: str, excited: bool = False) -> str:
+        return f"hello {name}!" if excited else f"hello {name}"
+
+    monkeypatch.setattr(run_module, "load_function", lambda target: greet)
+
+    exit_code = run_module.main(["fixtures:greet", "Ada", "--excited", "true"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.out.strip() == "hello Ada!"

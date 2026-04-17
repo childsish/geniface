@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from importlib import import_module
 from inspect import Parameter, Signature, getdoc, signature
 from typing import Any, Callable, get_type_hints
@@ -22,27 +23,40 @@ def parse_cli_kwargs(fn: Callable[..., Any], argv: list[str]) -> dict[str, Any]:
     return {name: value for name, value in vars(namespace).items() if value is not None}
 
 
+def run_cli(target: str, argv: list[str]) -> Any:
+    fn = load_function(target)
+    kwargs = parse_cli_kwargs(fn, argv)
+    return call_function(fn, kwargs)
+
+
 def main(argv: list[str] | None = None) -> int:
     bootstrap = argparse.ArgumentParser(add_help=False)
     bootstrap.add_argument("target", nargs="?")
-    args, _ = bootstrap.parse_known_args(argv)
+    args, remainder = bootstrap.parse_known_args(argv)
     if args.target is None:
         parser = argparse.ArgumentParser()
         parser.add_argument("target")
         parser.parse_args(argv)
         return 0
 
-    fn = load_function(args.target)
-    parser = build_cli_parser(fn, include_target=True)
-    namespace = parser.parse_args(argv)
-    kwargs = {
-        name: value
-        for name, value in vars(namespace).items()
-        if name != "target" and value is not None
-    }
-    result = call_function(fn, kwargs)
+    if "--help" in remainder or "-h" in remainder:
+        fn = load_function(args.target)
+        parser = build_cli_parser(fn, include_target=True)
+        parser.parse_args(argv)
+        return 0
+
+    try:
+        result = run_cli(args.target, remainder)
+    except Exception as exc:
+        print(exc, file=sys.stderr)
+        return 1
+
     print(result)
     return 0
+
+
+def build_help(fn: Callable[..., Any]) -> str:
+    return getdoc(fn) or ""
 
 
 def build_cli_parser(
@@ -50,7 +64,7 @@ def build_cli_parser(
     *,
     include_target: bool,
 ) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=getdoc(fn))
+    parser = argparse.ArgumentParser(description=build_help(fn))
     if include_target:
         parser.add_argument("target")
     annotations = get_type_hints(fn)

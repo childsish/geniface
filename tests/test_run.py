@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import geni.run as run_module
 
 from geni.run import build_help, parse_cli_kwargs, run_cli
@@ -40,6 +42,16 @@ def test_parse_cli_kwargs_omits_optional_arguments_when_not_provided() -> None:
     kwargs = parse_cli_kwargs(sample, ["Ada"])
 
     assert kwargs == {"name": "Ada"}
+
+
+def test_parse_cli_kwargs_supports_path_type(tmp_path: Path) -> None:
+    def sample(path: Path) -> None:
+        return None
+
+    file_path = tmp_path / "input.txt"
+    kwargs = parse_cli_kwargs(sample, [str(file_path)])
+
+    assert kwargs == {"path": file_path}
 
 
 def test_build_help_uses_docstring() -> None:

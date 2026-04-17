@@ -4,6 +4,7 @@ import argparse
 import sys
 from importlib import import_module
 from inspect import Parameter, Signature, getdoc, signature
+from pathlib import Path
 from typing import Any, Callable, get_type_hints
 
 from geni.ir import call_function
@@ -83,6 +84,8 @@ def build_cli_parser(
 def _parser_type(annotation: Any) -> Callable[[str], Any]:
     if annotation in (Signature.empty, str):
         return str
+    if annotation is Path:
+        return Path
     if annotation is int:
         return int
     if annotation is float:

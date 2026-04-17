@@ -6,6 +6,7 @@ from http.server import HTTPServer
 from pathlib import Path
 from threading import Thread
 
+import geni.serve as serve_module
 from geni.run import load_function
 from geni.serve import bind_function_args, build_handler, parse_serve_argv
 
@@ -119,6 +120,32 @@ def test_ui_api_submission_returns_expected_result() -> None:
     finally:
         server.shutdown()
         thread.join()
+
+
+def test_run_http_server_prints_ready_message(monkeypatch, capsys) -> None:
+    state: dict[str, bool] = {"served": False, "closed": False}
+
+    class FakeServer:
+        def __init__(self, address, handler) -> None:
+            self.server_address = ("127.0.0.1", 4321)
+
+        def serve_forever(self) -> None:
+            state["served"] = True
+
+        def server_close(self) -> None:
+            state["closed"] = True
+
+    monkeypatch.setattr(serve_module, "HTTPServer", FakeServer)
+
+    def greet(name: str) -> str:
+        return f"hello {name}"
+
+    serve_module.run_http_server(greet, "127.0.0.1", 0)
+
+    captured = capsys.readouterr()
+
+    assert "Serving on http://127.0.0.1:4321" in captured.out
+    assert state == {"served": True, "closed": True}
 
 
 def _start_server(fn):

@@ -163,6 +163,8 @@ def run_http_server(
     port: int,
 ) -> None:
     server = HTTPServer((host, port), build_handler(fn))
+    server_host, server_port = server.server_address
+    print(f"Serving on http://{server_host}:{server_port}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 from functools import partial, update_wrapper
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Callable
+from inspect import Parameter, Signature, signature
+from typing import Any, Callable, get_type_hints
 
 from geni.ir import call_function
 from geni.run import load_function, parse_cli_kwargs
@@ -35,7 +37,20 @@ def bind_function_args(fn: Callable[..., Any], argv: list[str]) -> Callable[...,
 
 
 def build_handler(fn: Callable[..., Any]) -> type[BaseHTTPRequestHandler]:
+    ui_html = build_ui(fn).encode("utf-8")
+
     class FunctionHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            if self.path != "/ui":
+                self.send_error(404)
+                return
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(ui_html)))
+            self.end_headers()
+            self.wfile.write(ui_html)
+
         def do_POST(self) -> None:
             if self.path != f"/{fn.__name__}":
                 self.send_error(404)
@@ -57,6 +72,89 @@ def build_handler(fn: Callable[..., Any]) -> type[BaseHTTPRequestHandler]:
             return
 
     return FunctionHandler
+
+
+def build_ui(fn: Callable[..., Any]) -> str:
+    annotations = get_type_hints(fn)
+    fields = []
+
+    for parameter in signature(fn).parameters.values():
+        fields.append(_build_ui_field(parameter, annotations.get(parameter.name, parameter.annotation)))
+
+    return (
+        "<!doctype html>\n"
+        "<html>\n"
+        "<body>\n"
+        f"<h1>{html.escape(fn.__name__)}</h1>\n"
+        '<form id="form">\n'
+        f"{''.join(fields)}"
+        '<button type="submit">Submit</button>\n'
+        "</form>\n"
+        '<pre id="result"></pre>\n'
+        "<script>\n"
+        'const form = document.getElementById("form");\n'
+        'const result = document.getElementById("result");\n'
+        'form.addEventListener("submit", async (event) => {\n'
+        "  event.preventDefault();\n"
+        "  const payload = {};\n"
+        "  for (const element of form.elements) {\n"
+        "    if (!element.name) continue;\n"
+        '    const kind = element.dataset.kind;\n'
+        '    if (kind === "bool") payload[element.name] = element.checked;\n'
+        '    else if (kind === "int") payload[element.name] = parseInt(element.value, 10);\n'
+        '    else if (kind === "float") payload[element.name] = parseFloat(element.value);\n'
+        "    else payload[element.name] = element.value;\n"
+        "  }\n"
+        f'  const response = await fetch("/{fn.__name__}", {{\n'
+        '    method: "POST",\n'
+        '    headers: {"Content-Type": "application/json"},\n'
+        "    body: JSON.stringify(payload),\n"
+        "  });\n"
+        "  result.textContent = JSON.stringify(await response.json(), null, 2);\n"
+        "});\n"
+        "</script>\n"
+        "</body>\n"
+        "</html>\n"
+    )
+
+
+def _build_ui_field(parameter: Parameter, annotation: Any) -> str:
+    kind, input_type, step = _field_kind(annotation)
+    label = html.escape(parameter.name)
+    name = html.escape(parameter.name)
+    required = " required" if parameter.default is Parameter.empty and kind != "bool" else ""
+
+    if kind == "bool":
+        checked = ""
+        if parameter.default is not Parameter.empty and parameter.default:
+            checked = " checked"
+        return (
+            f'<label>{label} '
+            f'<input name="{name}" type="checkbox" data-kind="bool"{checked}>'
+            "</label><br>\n"
+        )
+
+    value = ""
+    if parameter.default is not Parameter.empty:
+        value = f' value="{html.escape(str(parameter.default))}"'
+    step_attr = f' step="{step}"' if step else ""
+    return (
+        f'<label>{label} '
+        f'<input name="{name}" type="{input_type}" data-kind="{kind}"{step_attr}{value}{required}>'
+        "</label><br>\n"
+    )
+
+
+def _field_kind(annotation: Any) -> tuple[str, str, str | None]:
+    if annotation is int:
+        return "int", "number", "1"
+    if annotation is float:
+        return "float", "number", "any"
+    if annotation is bool:
+        return "bool", "checkbox", None
+    if annotation in (Signature.empty, str):
+        return "str", "text", None
+    return "str", "text", None
 
 
 def run_http_server(

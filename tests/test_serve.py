@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import http.client
+import json
+from http.server import HTTPServer
 from pathlib import Path
+from threading import Thread
 
 from geni.run import load_function
-from geni.serve import bind_function_args, parse_serve_argv
+from geni.serve import bind_function_args, build_handler, parse_serve_argv
 
 
 def test_parse_serve_argv_reads_server_args() -> None:
@@ -63,3 +67,62 @@ def test_bind_function_args_allows_no_startup_function_args() -> None:
     fn = bind_function_args(greet, [])
 
     assert fn is greet
+
+
+def test_ui_returns_html_with_function_name() -> None:
+    def greet(name: str, excited: bool = False) -> str:
+        return f"hello {name}!" if excited else f"hello {name}"
+
+    server, thread = _start_server(greet)
+
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
+        connection.request("GET", "/ui")
+        response = connection.getresponse()
+        body = response.read().decode("utf-8")
+
+        assert response.status == 200
+        assert "text/html" in response.getheader("Content-Type", "")
+        assert "greet" in body
+        assert "<form" in body
+    finally:
+        server.shutdown()
+        thread.join()
+
+
+def test_ui_api_submission_returns_expected_result() -> None:
+    def compute(name: str, count: int, ratio: float, enabled: bool) -> str:
+        return f"{name}:{count}:{ratio}:{enabled}"
+
+    server, thread = _start_server(compute)
+
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
+        connection.request(
+            "POST",
+            "/compute",
+            body=json.dumps(
+                {
+                    "name": "Ada",
+                    "count": 3,
+                    "ratio": 1.5,
+                    "enabled": True,
+                }
+            ),
+            headers={"Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        body = json.loads(response.read())
+
+        assert response.status == 200
+        assert body == {"result": "Ada:3:1.5:True"}
+    finally:
+        server.shutdown()
+        thread.join()
+
+
+def _start_server(fn):
+    server = HTTPServer(("127.0.0.1", 0), build_handler(fn))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread

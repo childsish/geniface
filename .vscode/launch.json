@@ -11,7 +11,7 @@
             "python": "${workspaceFolder}/.micromamba/envs/default/bin/python",
             "module": "pytest",
             "args": [
-                "tests/test_ir.py",
+                "tests",
                 "-q"
             ],
             "cwd": "${workspaceFolder}",

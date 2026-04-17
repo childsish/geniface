@@ -71,7 +71,7 @@ def test_bind_function_args_allows_no_startup_function_args() -> None:
 
 
 def test_ui_returns_html_with_function_name() -> None:
-    def greet(name: str, excited: bool = False) -> str:
+    def greet(name: str, upload: Path, excited: bool = False) -> str:
         return f"hello {name}!" if excited else f"hello {name}"
 
     server, thread = _start_server(greet)
@@ -88,6 +88,7 @@ def test_ui_returns_html_with_function_name() -> None:
         assert "<form" in body
         assert "bootstrap@5.3.8" in body
         assert "form-control" in body
+        assert 'type="file"' in body
     finally:
         server.shutdown()
         thread.join()
@@ -119,6 +120,41 @@ def test_ui_api_submission_returns_expected_result() -> None:
 
         assert response.status == 200
         assert body == {"result": "Ada:3:1.5:True"}
+    finally:
+        server.shutdown()
+        thread.join()
+
+
+def test_multipart_upload_maps_file_to_path() -> None:
+    def read_upload(upload: Path, note: str) -> str:
+        return f"{upload.exists()}:{upload.read_text(encoding='utf-8')}:{note}"
+
+    server, thread = _start_server(read_upload)
+
+    try:
+        boundary = "test-boundary"
+        body = (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="note"\r\n\r\n'
+            "memo\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="upload"; filename="sample.txt"\r\n'
+            "Content-Type: text/plain\r\n\r\n"
+            "hello file\r\n"
+            f"--{boundary}--\r\n"
+        ).encode("utf-8")
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
+        connection.request(
+            "POST",
+            "/read_upload",
+            body=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+        response = connection.getresponse()
+        payload = json.loads(response.read())
+
+        assert response.status == 200
+        assert payload == {"result": "True:hello file:memo"}
     finally:
         server.shutdown()
         thread.join()

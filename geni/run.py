@@ -24,6 +24,10 @@ def parse_cli_kwargs(fn: Callable[..., Any], argv: list[str]) -> dict[str, Any]:
     return {name: value for name, value in vars(namespace).items() if value is not None}
 
 
+def coerce_value(annotation: Any, value: str) -> Any:
+    return _parser_type(annotation)(value)
+
+
 def run_cli(target: str, argv: list[str]) -> Any:
     fn = load_function(target)
     kwargs = parse_cli_kwargs(fn, argv)

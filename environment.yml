@@ -9,3 +9,5 @@ channels:
 dependencies:
   - python
   - pytest
+  - fastapi
+  - httpx

@@ -21,6 +21,10 @@ class FunctionSpec:
     fn: Callable[..., Any]
 
 
+def call_function(fn: Callable[..., Any], kwargs: dict[str, Any]) -> Any:
+    return fn(**kwargs)
+
+
 def inspect_function(fn: Callable[..., Any]) -> FunctionSpec:
     sig = signature(fn)
     inputs = [

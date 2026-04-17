@@ -1,8 +1,8 @@
-# geniface — Requirements Document
+# geni — Requirements Document
 
 ## 1. Overview
 
-`geniface` is a lightweight interface generation layer that:
+`geni` is a lightweight interface generation layer that:
 
 - Treats **Python functions as the primary unit of computation**
 - Derives **multiple execution interfaces** (CLI, HTTP, UI, composition) from a single definition
@@ -45,7 +45,7 @@ All interfaces are derived from this definition.
 
 ### 2.3 No Execution Ownership
 
-`geniface`:
+`geni`:
 
 - DOES NOT schedule execution
 - DOES NOT manage runtime state
@@ -198,7 +198,7 @@ StepSpec:
 Command:
 
 ```
-geniface run module:function --arg value
+geni run module:function --arg value
 ```
 
 Requirements:
@@ -242,9 +242,9 @@ Derived from schema:
 ### 7.1 CLI
 
 ```
-geniface run module:function
-geniface build module:function
-geniface serve module
+geni run module:function
+geni build module:function
+geni serve module
 ```
 
 ---
@@ -252,7 +252,7 @@ geniface serve module
 ### 7.2 Python API
 
 ```
-from geniface import build
+from geni import build
 
 build(function_spec)
 ```
@@ -288,7 +288,7 @@ Generate files only when needed:
 Output location:
 
 ```
-.build/geniface/
+.build/geni/
 ```
 
 ---
@@ -398,7 +398,7 @@ Future extensions:
 
 ## 15. Non-Goals
 
-`geniface` will NOT:
+`geni` will NOT:
 
 - implement scheduling
 - manage distributed systems
@@ -418,7 +418,7 @@ Future extensions:
 
 ## 17. Summary
 
-`geniface` is:
+`geni` is:
 
 - a **function-centric interface generator**
 - based on **introspection and optional schemas**

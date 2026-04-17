@@ -1,4 +1,4 @@
-from geniface import inspect_function
+from geni import call_function, inspect_function
 
 
 def test_inspect_function_with_required_argument() -> None:
@@ -39,3 +39,30 @@ def test_inspect_function_with_return_type() -> None:
     assert spec.output.required is True
     assert spec.output.default is None
     assert spec.fn is enabled
+
+
+def test_call_function_with_simple_keyword_arguments() -> None:
+    def greet(name: str) -> str:
+        return f"hello {name}"
+
+    result = call_function(greet, {"name": "Ada"})
+
+    assert result == "hello Ada"
+
+
+def test_call_function_with_default_argument() -> None:
+    def scale(count: int = 3) -> int:
+        return count * 2
+
+    result = call_function(scale, {})
+
+    assert result == 6
+
+
+def test_call_function_returns_value() -> None:
+    def add(left: int, right: int) -> int:
+        return left + right
+
+    result = call_function(add, {"left": 2, "right": 5})
+
+    assert result == 7

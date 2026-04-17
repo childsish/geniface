@@ -87,6 +87,53 @@ def test_generated_fastapi_file_can_be_imported_and_called(
     assert response.json() == {"result": "hello Ada!"}
 
 
+def test_generated_fastapi_file_supports_path_upload(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    module = tmp_path / "upload_fixtures.py"
+    module.write_text(
+        "\n".join(
+            [
+                "from pathlib import Path",
+                "",
+                "def ingest(upload: Path, name: str, count: int, enabled: bool = False) -> str:",
+                "    content = upload.read_text(encoding='utf-8')",
+                '    return f"{name}:{count}:{enabled}:{content}"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    fn = load_function("upload_fixtures:ingest")
+    output_path = tmp_path / "generated_upload_app.py"
+    fastapi_generate(fn, output_path)
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "UploadFile = File(...)" in content
+    assert "name: str = Form(...)" in content
+    assert "count: int = Form(...)" in content
+    assert "enabled: bool = Form(False)" in content
+
+    spec = importlib.util.spec_from_file_location("generated_upload_app", output_path)
+    assert spec is not None
+    assert spec.loader is not None
+    generated_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generated_module)
+
+    client = TestClient(generated_module.app)
+    response = client.post(
+        "/ingest",
+        data={"name": "Ada", "count": "3", "enabled": "true"},
+        files={"upload": ("sample.txt", b"hello file", "text/plain")},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"result": "Ada:3:True:hello file"}
+
+
 def test_generate_cli_via_subprocess(tmp_path: Path) -> None:
     module = tmp_path / "cli_generate_fixtures.py"
     module.write_text(

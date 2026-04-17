@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest", "fastapi", "httpx"]
+dev = ["pytest", "fastapi", "httpx", "python-multipart"]
 
 [tool.setuptools.packages.find]
 include = ["geni", "geni.*"]

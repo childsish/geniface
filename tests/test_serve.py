@@ -86,6 +86,8 @@ def test_ui_returns_html_with_function_name() -> None:
         assert "text/html" in response.getheader("Content-Type", "")
         assert "greet" in body
         assert "<form" in body
+        assert "bootstrap@5.3.8" in body
+        assert "form-control" in body
     finally:
         server.shutdown()
         thread.join()

@@ -83,14 +83,46 @@ def build_ui(fn: Callable[..., Any]) -> str:
 
     return (
         "<!doctype html>\n"
-        "<html>\n"
+        '<html lang="en" data-bs-theme="light">\n'
+        "<head>\n"
+        '  <meta charset="utf-8">\n'
+        '  <meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        f"  <title>{html.escape(fn.__name__)} UI</title>\n"
+        '  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">\n'
+        "  <style>\n"
+        "    body { background: var(--bs-tertiary-bg); }\n"
+        "    .result-box { min-height: 10rem; white-space: pre-wrap; }\n"
+        "  </style>\n"
+        "</head>\n"
         "<body>\n"
-        f"<h1>{html.escape(fn.__name__)}</h1>\n"
-        '<form id="form">\n'
+        '  <main class="container py-5">\n'
+        '    <div class="row justify-content-center">\n'
+        '      <div class="col-12 col-lg-8 col-xl-7">\n'
+        '        <section class="card border-0 shadow-sm">\n'
+        '          <div class="card-body p-4 p-md-5">\n'
+        '            <div class="mb-4">\n'
+        f'              <p class="text-uppercase text-secondary small fw-semibold mb-2">Browser UI</p>\n'
+        f'              <h1 class="h3 mb-2">{html.escape(fn.__name__)}</h1>\n'
+        f'              <p class="text-body-secondary mb-0">Submit primitive JSON input to <code>/{html.escape(fn.__name__)}</code>.</p>\n'
+        "            </div>\n"
+        '            <form id="form" class="vstack gap-3">\n'
         f"{''.join(fields)}"
-        '<button type="submit">Submit</button>\n'
-        "</form>\n"
-        '<pre id="result"></pre>\n'
+        '              <div class="d-flex justify-content-end pt-2">\n'
+        '                <button type="submit" class="btn btn-primary px-4">Run function</button>\n'
+        "              </div>\n"
+        "            </form>\n"
+        '            <div class="mt-4">\n'
+        '              <div class="d-flex align-items-center justify-content-between mb-2">\n'
+        '                <h2 class="h6 mb-0">Response</h2>\n'
+        '                <span class="badge text-bg-light border">JSON</span>\n'
+        "              </div>\n"
+        '              <pre id="result" class="result-box bg-body-tertiary border rounded-3 p-3 mb-0 small text-body-secondary">{}</pre>\n'
+        "            </div>\n"
+        "          </div>\n"
+        "        </section>\n"
+        "      </div>\n"
+        "    </div>\n"
+        "  </main>\n"
         "<script>\n"
         'const form = document.getElementById("form");\n'
         'const result = document.getElementById("result");\n'
@@ -111,6 +143,7 @@ def build_ui(fn: Callable[..., Any]) -> str:
         "    body: JSON.stringify(payload),\n"
         "  });\n"
         "  result.textContent = JSON.stringify(await response.json(), null, 2);\n"
+        '  result.classList.remove("text-body-secondary");\n'
         "});\n"
         "</script>\n"
         "</body>\n"
@@ -129,9 +162,10 @@ def _build_ui_field(parameter: Parameter, annotation: Any) -> str:
         if parameter.default is not Parameter.empty and parameter.default:
             checked = " checked"
         return (
-            f'<label>{label} '
-            f'<input name="{name}" type="checkbox" data-kind="bool"{checked}>'
-            "</label><br>\n"
+            '<div class="form-check form-switch">\n'
+            f'  <input class="form-check-input" id="{name}" name="{name}" type="checkbox" data-kind="bool"{checked}>\n'
+            f'  <label class="form-check-label" for="{name}">{label}</label>\n'
+            "</div>\n"
         )
 
     value = ""
@@ -139,9 +173,10 @@ def _build_ui_field(parameter: Parameter, annotation: Any) -> str:
         value = f' value="{html.escape(str(parameter.default))}"'
     step_attr = f' step="{step}"' if step else ""
     return (
-        f'<label>{label} '
-        f'<input name="{name}" type="{input_type}" data-kind="{kind}"{step_attr}{value}{required}>'
-        "</label><br>\n"
+        '<div>\n'
+        f'  <label class="form-label" for="{name}">{label}</label>\n'
+        f'  <input class="form-control" id="{name}" name="{name}" type="{input_type}" data-kind="{kind}"{step_attr}{value}{required}>\n'
+        "</div>\n"
     )
 
 

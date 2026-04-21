@@ -91,7 +91,23 @@ def generate_ui(fn: Callable[..., Any]) -> str:
         "    headers,\n"
         "    body,\n"
         "  });\n"
-        "  result.textContent = JSON.stringify(await response.json(), null, 2);\n"
+        '  const disposition = response.headers.get("Content-Disposition") || "";\n'
+        '  if (disposition.includes("attachment")) {\n'
+        "    const blob = await response.blob();\n"
+        '    const match = disposition.match(/filename="([^"]+)"/);\n'
+        '    const filename = match ? match[1] : "download";\n'
+        "    const url = URL.createObjectURL(blob);\n"
+        '    const link = document.createElement("a");\n'
+        "    link.href = url;\n"
+        "    link.download = filename;\n"
+        "    link.click();\n"
+        "    URL.revokeObjectURL(url);\n"
+        "    result.textContent = JSON.stringify({download: filename}, null, 2);\n"
+        "    return;\n"
+        "  }\n"
+        '  const responseType = response.headers.get("Content-Type") || "";\n'
+        '  if (responseType.includes("application/json")) result.textContent = JSON.stringify(await response.json(), null, 2);\n'
+        "  else result.textContent = await response.text();\n"
         "});\n"
         "</script>\n"
         "</body>\n"
@@ -138,8 +154,8 @@ def generate(fn: Callable[..., Any], output_path: Path) -> None:
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
 
 from {module_name} import {function_name}
 
@@ -158,12 +174,25 @@ def route(
 ):
 {"\n".join(route_body)}
     result = {function_name}({", ".join(call_arguments)})
+    if isinstance(result, Path):
+        if not result.exists():
+            raise HTTPException(status_code=500, detail=f"Returned path does not exist: {{result}}")
+        if not result.is_file():
+            raise HTTPException(status_code=500, detail=f"Returned path is not a file: {{result}}")
+        return FileResponse(
+            path=result,
+            filename=result.name,
+            media_type="application/octet-stream",
+        )
     return {{"result": result}}
 """
     else:
         output = f"""\
+from pathlib import Path
+
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import HTTPException
+from fastapi.responses import FileResponse, HTMLResponse
 
 from {module_name} import {function_name}
 
@@ -179,6 +208,16 @@ def ui():
 @app.post("/{function_name}")
 def route(payload: dict):
     result = {function_name}(**payload)
+    if isinstance(result, Path):
+        if not result.exists():
+            raise HTTPException(status_code=500, detail=f"Returned path does not exist: {{result}}")
+        if not result.is_file():
+            raise HTTPException(status_code=500, detail=f"Returned path is not a file: {{result}}")
+        return FileResponse(
+            path=result,
+            filename=result.name,
+            media_type="application/octet-stream",
+        )
     return {{"result": result}}
 """
 

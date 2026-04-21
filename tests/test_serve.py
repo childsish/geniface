@@ -125,6 +125,64 @@ def test_ui_api_submission_returns_expected_result() -> None:
         thread.join()
 
 
+def test_path_result_returns_download(tmp_path: Path) -> None:
+    output = tmp_path / "serve-download.txt"
+
+    def build_file() -> Path:
+        output.write_bytes(b"hello download")
+        return output
+
+    server, thread = _start_server(build_file)
+
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
+        connection.request(
+            "POST",
+            "/build_file",
+            body=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        body = response.read()
+
+        assert response.status == 200
+        assert response.getheader("Content-Type") == "application/octet-stream"
+        assert 'attachment; filename="serve-download.txt"' == response.getheader(
+            "Content-Disposition"
+        )
+        assert body == b"hello download"
+    finally:
+        server.shutdown()
+        thread.join()
+
+
+def test_missing_path_result_returns_server_error(tmp_path: Path) -> None:
+    missing_path = tmp_path / "missing-download.txt"
+
+    def build_file() -> Path:
+        return missing_path
+
+    server, thread = _start_server(build_file)
+
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
+        connection.request(
+            "POST",
+            "/build_file",
+            body=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        body = response.read().decode("utf-8")
+
+        assert response.status == 500
+        assert "Returned path does not exist:" in body
+        assert "missing-download.txt" in body
+    finally:
+        server.shutdown()
+        thread.join()
+
+
 def test_multipart_upload_maps_file_to_path() -> None:
     def read_upload(upload: Path, note: str) -> str:
         return f"{upload.exists()}:{upload.read_text(encoding='utf-8')}:{note}"

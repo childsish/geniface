@@ -85,6 +85,39 @@ def build_handler(fn: Callable[..., Any]) -> type[BaseHTTPRequestHandler]:
                 self.send_error(415)
                 return
             result = call_function(fn, kwargs)
+            if isinstance(result, Path):
+                if not result.exists():
+                    payload = f"Returned path does not exist: {result}".encode("utf-8")
+                    self.send_response(500)
+                    self.send_header("Content-Type", "text/plain; charset=utf-8")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    return
+                if not result.is_file():
+                    payload = f"Returned path is not a file: {result}".encode("utf-8")
+                    self.send_response(500)
+                    self.send_header("Content-Type", "text/plain; charset=utf-8")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    return
+
+                with result.open("rb") as handle:
+                    payload = handle.read()
+
+                filename = result.name.replace('"', '\\"')
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header(
+                    "Content-Disposition",
+                    f'attachment; filename="{filename}"',
+                )
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+
             payload = json.dumps({"result": result}).encode("utf-8")
 
             self.send_response(200)
@@ -186,7 +219,24 @@ def build_ui(fn: Callable[..., Any]) -> str:
         "    headers,\n"
         "    body,\n"
         "  });\n"
-        "  result.textContent = JSON.stringify(await response.json(), null, 2);\n"
+        '  const disposition = response.headers.get("Content-Disposition") || "";\n'
+        '  if (disposition.includes("attachment")) {\n'
+        "    const blob = await response.blob();\n"
+        '    const match = disposition.match(/filename="([^"]+)"/);\n'
+        '    const filename = match ? match[1] : "download";\n'
+        "    const url = URL.createObjectURL(blob);\n"
+        '    const link = document.createElement("a");\n'
+        "    link.href = url;\n"
+        "    link.download = filename;\n"
+        "    link.click();\n"
+        "    URL.revokeObjectURL(url);\n"
+        "    result.textContent = JSON.stringify({download: filename}, null, 2);\n"
+        '    result.classList.remove("text-body-secondary");\n'
+        "    return;\n"
+        "  }\n"
+        '  const responseType = response.headers.get("Content-Type") || "";\n'
+        '  if (responseType.includes("application/json")) result.textContent = JSON.stringify(await response.json(), null, 2);\n'
+        "  else result.textContent = await response.text();\n"
         '  result.classList.remove("text-body-secondary");\n'
         "});\n"
         "</script>\n"

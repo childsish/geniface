@@ -49,10 +49,11 @@ def test_fastapi_adapter_generate_creates_valid_file(tmp_path: Path, monkeypatch
     assert output_path.exists()
     content = output_path.read_text(encoding="utf-8")
     assert "from fastapi import FastAPI" in content
-    assert "from fastapi.responses import HTMLResponse" in content
+    assert "from fastapi.responses import FileResponse, HTMLResponse" in content
     assert "from adapter_fixtures import greet" in content
     assert '@app.post("/greet")' in content
     assert '@app.get("/ui", response_class=HTMLResponse)' in content
+    assert "return FileResponse(" in content
 
 
 def test_generated_fastapi_file_can_be_imported_and_called(
@@ -92,7 +93,49 @@ def test_generated_fastapi_file_can_be_imported_and_called(
     response = client.post("/greet", json={"name": "Ada", "excited": True})
 
     assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
     assert response.json() == {"result": "hello Ada!"}
+
+
+def test_generated_fastapi_file_supports_path_return(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    module = tmp_path / "download_fixtures.py"
+    module.write_text(
+        "\n".join(
+            [
+                "from pathlib import Path",
+                "",
+                "def export(name: str) -> Path:",
+                "    output = Path(__file__).with_name('download.txt')",
+                "    output.write_text(f'hello {name}', encoding='utf-8')",
+                "    return output",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    fn = load_function("download_fixtures:export")
+    output_path = tmp_path / "generated_download_app.py"
+    fastapi_generate(fn, output_path)
+
+    spec = importlib.util.spec_from_file_location("generated_download_app", output_path)
+    assert spec is not None
+    assert spec.loader is not None
+    generated_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generated_module)
+
+    client = TestClient(generated_module.app)
+    response = client.post("/export", json={"name": "Ada"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/octet-stream"
+    assert "attachment" in response.headers["content-disposition"]
+    assert "download.txt" in response.headers["content-disposition"]
+    assert response.content == b"hello Ada"
 
 
 def test_generated_fastapi_file_supports_path_upload(

@@ -5,7 +5,7 @@ from inspect import Parameter, signature
 from pathlib import Path
 from typing import Any, Callable, get_type_hints
 
-from geni.template_utils import load_template
+from geni.template_utils import render_template
 
 
 def generate_ui(fn: Callable[..., Any]) -> str:
@@ -18,7 +18,7 @@ def generate_ui(fn: Callable[..., Any]) -> str:
         fields.append(_build_ui_field(parameter, annotation))
         has_file_input = has_file_input or annotation is Path
 
-    return _render_template(
+    return render_template(
         "fastapi_ui.html.tmpl",
         {
             "FUNCTION_LABEL": html.escape(fn.__name__),
@@ -64,7 +64,7 @@ def generate(fn: Callable[..., Any], output_path: Path) -> None:
             )
             call_arguments.append(f"{parameter.name}={parameter.name}")
 
-        output = _render_template(
+        output = render_template(
             "fastapi_multipart.py.tmpl",
             {
                 "MODULE_NAME": module_name,
@@ -76,7 +76,7 @@ def generate(fn: Callable[..., Any], output_path: Path) -> None:
             },
         )
     else:
-        output = _render_template(
+        output = render_template(
             "fastapi_json.py.tmpl",
             {
                 "MODULE_NAME": module_name,
@@ -92,28 +92,36 @@ def _build_ui_field(parameter: Parameter, annotation: Any) -> str:
     kind, input_type, step = _field_kind(annotation)
     label = html.escape(parameter.name)
     name = html.escape(parameter.name)
+    required = " required" if parameter.default is Parameter.empty else ""
 
     if kind == "bool":
         checked = ""
         if parameter.default is not Parameter.empty and parameter.default:
             checked = " checked"
         return (
-            '    <div class="field checkbox">\n'
-            f'      <input id="{name}" name="{name}" type="checkbox" data-kind="bool"{checked}>\n'
-            f'      <label for="{name}">{label}</label>\n'
-            "    </div>\n"
+            '              <div class="form-check form-switch">\n'
+            f'                <input class="form-check-input" id="{name}" name="{name}" type="checkbox" data-kind="bool"{checked}>\n'
+            f'                <label class="form-check-label" for="{name}">{label}</label>\n'
+            "              </div>\n"
         )
 
-    required = " required" if parameter.default is Parameter.empty else ""
+    if kind == "path":
+        return (
+            '              <div>\n'
+            f'                <label class="form-label" for="{name}">{label}</label>\n'
+            f'                <input class="form-control" id="{name}" name="{name}" type="file" data-kind="path"{required}>\n'
+            "              </div>\n"
+        )
+
     value = ""
     if parameter.default is not Parameter.empty and kind != "path":
         value = f' value="{html.escape(str(parameter.default))}"'
     step_attr = f' step="{step}"' if step else ""
     return (
-        '    <div class="field">\n'
-        f'      <label for="{name}">{label}</label>\n'
-        f'      <input id="{name}" name="{name}" type="{input_type}" data-kind="{kind}"{step_attr}{value}{required}>\n'
-        "    </div>\n"
+        '              <div>\n'
+        f'                <label class="form-label" for="{name}">{label}</label>\n'
+        f'                <input class="form-control" id="{name}" name="{name}" type="{input_type}" data-kind="{kind}"{step_attr}{value}{required}>\n'
+        "              </div>\n"
     )
 
 
@@ -139,10 +147,3 @@ def _type_name(annotation: Any) -> str:
     if annotation is Path:
         return "Path"
     return "str"
-
-
-def _render_template(name: str, values: dict[str, str]) -> str:
-    template = load_template(name)
-    for key, value in values.items():
-        template = template.replace(f"__{key}__", value)
-    return template

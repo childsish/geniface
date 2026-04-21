@@ -1,35 +1,43 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>__FUNCTION_LABEL__ UI</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
   <style>
-    body { font-family: sans-serif; margin: 0; background: #f6f7f9; color: #1f2933; }
-    main { max-width: 40rem; margin: 3rem auto; padding: 0 1rem; }
-    section { background: #ffffff; border: 1px solid #d9e2ec; border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06); }
-    h1 { margin-top: 0; margin-bottom: 0.5rem; font-size: 1.75rem; }
-    p { margin-top: 0; color: #52606d; }
-    .field { margin-bottom: 1rem; }
-    label { display: block; margin-bottom: 0.35rem; font-weight: 600; }
-    input[type=text], input[type=number], input[type=file] { width: 100%; box-sizing: border-box; padding: 0.65rem 0.75rem; border: 1px solid #bcccdc; border-radius: 0.5rem; background: #fff; }
-    .checkbox { display: flex; align-items: center; gap: 0.5rem; }
-    .checkbox label { margin: 0; }
-    button { border: 0; border-radius: 0.5rem; background: #1f2933; color: #fff; padding: 0.7rem 1rem; font: inherit; cursor: pointer; }
-    pre { margin: 1.5rem 0 0; padding: 1rem; min-height: 8rem; background: #f6f7f9; border: 1px solid #d9e2ec; border-radius: 0.5rem; overflow-x: auto; }
+    body { background: var(--bs-tertiary-bg); }
+    .result-box { min-height: 10rem; white-space: pre-wrap; }
   </style>
 </head>
 <body>
-<main>
-<section>
-  <h1>__FUNCTION_LABEL__</h1>
-  <p>Submit input to <code>/__FUNCTION_ROUTE__</code>.</p>
-  <form id="form">
-__FIELDS__    <button type="submit">Run function</button>
-  </form>
-  <pre id="result">{}</pre>
-</section>
-</main>
+  <main class="container py-5">
+    <div class="row justify-content-center">
+      <div class="col-12 col-lg-8 col-xl-7">
+        <section class="card border-0 shadow-sm">
+          <div class="card-body p-4 p-md-5">
+            <div class="mb-4">
+              <p class="text-uppercase text-secondary small fw-semibold mb-2">Browser UI</p>
+              <h1 class="h3 mb-2">__FUNCTION_LABEL__</h1>
+              <p class="text-body-secondary mb-0">Submit input to <code>/__FUNCTION_ROUTE__</code>.</p>
+            </div>
+            <form id="form">
+__FIELDS__              <div class="d-flex justify-content-end pt-2">
+                <button type="submit" class="btn btn-primary px-4">Run function</button>
+              </div>
+            </form>
+            <div class="mt-4">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <h2 class="h6 mb-0">Response</h2>
+                <span class="badge text-bg-light border">JSON</span>
+              </div>
+              <pre id="result" class="result-box bg-body-tertiary border rounded-3 p-3 mb-0 small text-body-secondary">{}</pre>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
 <script>
 const form = document.getElementById("form");
 const result = document.getElementById("result");
@@ -81,11 +89,13 @@ form.addEventListener("submit", async (event) => {
     link.click();
     URL.revokeObjectURL(url);
     result.textContent = JSON.stringify({download: filename}, null, 2);
+    result.classList.remove("text-body-secondary");
     return;
   }
   const responseType = response.headers.get("Content-Type") || "";
   if (responseType.includes("application/json")) result.textContent = JSON.stringify(await response.json(), null, 2);
   else result.textContent = await response.text();
+  result.classList.remove("text-body-secondary");
 });
 </script>
 </body>

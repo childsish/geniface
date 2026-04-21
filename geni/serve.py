@@ -13,6 +13,7 @@ from typing import Any, Callable, get_type_hints
 
 from geni.ir import call_function
 from geni.run import coerce_value, load_function, parse_cli_kwargs
+from geni.template_utils import render_template
 
 try:
     import cgi
@@ -142,106 +143,14 @@ def build_ui(fn: Callable[..., Any]) -> str:
         fields.append(_build_ui_field(parameter, annotation))
         has_file_input = has_file_input or annotation is Path
 
-    return (
-        "<!doctype html>\n"
-        '<html lang="en" data-bs-theme="light">\n'
-        "<head>\n"
-        '  <meta charset="utf-8">\n'
-        '  <meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        f"  <title>{html.escape(fn.__name__)} UI</title>\n"
-        '  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">\n'
-        "  <style>\n"
-        "    body { background: var(--bs-tertiary-bg); }\n"
-        "    .result-box { min-height: 10rem; white-space: pre-wrap; }\n"
-        "  </style>\n"
-        "</head>\n"
-        "<body>\n"
-        '  <main class="container py-5">\n'
-        '    <div class="row justify-content-center">\n'
-        '      <div class="col-12 col-lg-8 col-xl-7">\n'
-        '        <section class="card border-0 shadow-sm">\n'
-        '          <div class="card-body p-4 p-md-5">\n'
-        '            <div class="mb-4">\n'
-        f'              <p class="text-uppercase text-secondary small fw-semibold mb-2">Browser UI</p>\n'
-        f'              <h1 class="h3 mb-2">{html.escape(fn.__name__)}</h1>\n'
-        f'              <p class="text-body-secondary mb-0">Submit input to <code>/{html.escape(fn.__name__)}</code>.</p>\n'
-        "            </div>\n"
-        '            <form id="form" class="vstack gap-3">\n'
-        f"{''.join(fields)}"
-        '              <div class="d-flex justify-content-end pt-2">\n'
-        '                <button type="submit" class="btn btn-primary px-4">Run function</button>\n'
-        "              </div>\n"
-        "            </form>\n"
-        '            <div class="mt-4">\n'
-        '              <div class="d-flex align-items-center justify-content-between mb-2">\n'
-        '                <h2 class="h6 mb-0">Response</h2>\n'
-        '                <span class="badge text-bg-light border">JSON</span>\n'
-        "              </div>\n"
-        '              <pre id="result" class="result-box bg-body-tertiary border rounded-3 p-3 mb-0 small text-body-secondary">{}</pre>\n'
-        "            </div>\n"
-        "          </div>\n"
-        "        </section>\n"
-        "      </div>\n"
-        "    </div>\n"
-        "  </main>\n"
-        "<script>\n"
-        'const form = document.getElementById("form");\n'
-        'const result = document.getElementById("result");\n'
-        'form.addEventListener("submit", async (event) => {\n'
-        "  event.preventDefault();\n"
-        f'  const useFormData = {"true" if has_file_input else "false"};\n'
-        "  let body;\n"
-        "  let headers = {};\n"
-        "  if (useFormData) {\n"
-        "    body = new FormData();\n"
-        "    for (const element of form.elements) {\n"
-        "      if (!element.name) continue;\n"
-        '      const kind = element.dataset.kind;\n'
-        '      if (kind === "bool") body.append(element.name, String(element.checked));\n'
-        '      else if (kind === "path") { if (element.files[0]) body.append(element.name, element.files[0]); }\n'
-        "      else body.append(element.name, element.value);\n"
-        "    }\n"
-        "  } else {\n"
-        "    const payload = {};\n"
-        "    for (const element of form.elements) {\n"
-        "      if (!element.name) continue;\n"
-        '      const kind = element.dataset.kind;\n'
-        '      if (kind === "bool") payload[element.name] = element.checked;\n'
-        '      else if (kind === "int") payload[element.name] = parseInt(element.value, 10);\n'
-        '      else if (kind === "float") payload[element.name] = parseFloat(element.value);\n'
-        "      else payload[element.name] = element.value;\n"
-        "    }\n"
-        '    headers = {"Content-Type": "application/json"};\n'
-        "    body = JSON.stringify(payload);\n"
-        "  }\n"
-        f'  const response = await fetch("/{fn.__name__}", {{\n'
-        '    method: "POST",\n'
-        "    headers,\n"
-        "    body,\n"
-        "  });\n"
-        '  const disposition = response.headers.get("Content-Disposition") || "";\n'
-        '  if (disposition.includes("attachment")) {\n'
-        "    const blob = await response.blob();\n"
-        '    const match = disposition.match(/filename="([^"]+)"/);\n'
-        '    const filename = match ? match[1] : "download";\n'
-        "    const url = URL.createObjectURL(blob);\n"
-        '    const link = document.createElement("a");\n'
-        "    link.href = url;\n"
-        "    link.download = filename;\n"
-        "    link.click();\n"
-        "    URL.revokeObjectURL(url);\n"
-        "    result.textContent = JSON.stringify({download: filename}, null, 2);\n"
-        '    result.classList.remove("text-body-secondary");\n'
-        "    return;\n"
-        "  }\n"
-        '  const responseType = response.headers.get("Content-Type") || "";\n'
-        '  if (responseType.includes("application/json")) result.textContent = JSON.stringify(await response.json(), null, 2);\n'
-        "  else result.textContent = await response.text();\n"
-        '  result.classList.remove("text-body-secondary");\n'
-        "});\n"
-        "</script>\n"
-        "</body>\n"
-        "</html>\n"
+    return render_template(
+        "fastapi_ui.html.tmpl",
+        {
+            "FUNCTION_LABEL": html.escape(fn.__name__),
+            "FUNCTION_ROUTE": fn.__name__,
+            "FIELDS": "".join(fields),
+            "USE_FORM_DATA": "true" if has_file_input else "false",
+        },
     )
 
 

@@ -52,16 +52,27 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         result = run_cli(args.target, remainder)
+        print_cli_result(result)
     except Exception as exc:
         print(exc, file=sys.stderr)
         return 1
 
-    print(result)
     return 0
 
 
 def build_help(fn: Callable[..., Any]) -> str:
     return getdoc(fn) or ""
+
+
+def print_cli_result(result: Any) -> None:
+    if result is None:
+        return
+    if isinstance(result, Path):
+        if not result.exists():
+            raise FileNotFoundError(result)
+        print(result)
+        return
+    print(result)
 
 
 def build_cli_parser(

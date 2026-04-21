@@ -75,3 +75,53 @@ def test_main_prints_run_cli_result(monkeypatch, capsys) -> None:
 
     assert exit_code == 0
     assert captured.out.strip() == "hello Ada!"
+
+
+def test_main_prints_returned_path(monkeypatch, capsys, tmp_path: Path) -> None:
+    output_path = tmp_path / "result.txt"
+    output_path.write_text("done", encoding="utf-8")
+
+    def build_file() -> Path:
+        return output_path
+
+    monkeypatch.setattr(run_module, "load_function", lambda target: build_file)
+
+    exit_code = run_module.main(["fixtures:build_file"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.out.strip() == str(output_path)
+    assert captured.err == ""
+
+
+def test_main_errors_for_nonexistent_returned_path(monkeypatch, capsys, tmp_path: Path) -> None:
+    missing_path = tmp_path / "missing.txt"
+
+    def build_file() -> Path:
+        return missing_path
+
+    monkeypatch.setattr(run_module, "load_function", lambda target: build_file)
+
+    exit_code = run_module.main(["fixtures:build_file"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert captured.out == ""
+    assert str(missing_path) in captured.err
+
+
+def test_main_prints_nothing_for_none_result(monkeypatch, capsys) -> None:
+    def do_nothing() -> None:
+        return None
+
+    monkeypatch.setattr(run_module, "load_function", lambda target: do_nothing)
+
+    exit_code = run_module.main(["fixtures:do_nothing"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.out == ""
+    assert captured.err == ""

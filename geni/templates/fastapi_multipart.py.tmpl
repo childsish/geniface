@@ -1,0 +1,34 @@
+import tempfile
+from pathlib import Path
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
+
+from __MODULE_NAME__ import __FUNCTION_NAME__
+
+app = FastAPI()
+UI_HTML = __UI_HTML__
+
+
+@app.get("/ui", response_class=HTMLResponse)
+def ui():
+    return HTMLResponse(UI_HTML)
+
+
+@app.post("/__FUNCTION_NAME__")
+def route(
+__ROUTE_SIGNATURE__
+):
+__ROUTE_BODY__
+    result = __FUNCTION_NAME__(__CALL_ARGUMENTS__)
+    if isinstance(result, Path):
+        if not result.exists():
+            raise HTTPException(status_code=500, detail=f"Returned path does not exist: {result}")
+        if not result.is_file():
+            raise HTTPException(status_code=500, detail=f"Returned path is not a file: {result}")
+        return FileResponse(
+            path=result,
+            filename=result.name,
+            media_type="application/octet-stream",
+        )
+    return {"result": result}

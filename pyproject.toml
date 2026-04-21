@@ -15,3 +15,6 @@ dev = ["pytest", "fastapi", "httpx", "python-multipart"]
 
 [tool.setuptools.packages.find]
 include = ["geni", "geni.*"]
+
+[tool.setuptools.package-data]
+"geni.templates" = ["*.tmpl"]

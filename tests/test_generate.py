@@ -49,8 +49,10 @@ def test_fastapi_adapter_generate_creates_valid_file(tmp_path: Path, monkeypatch
     assert output_path.exists()
     content = output_path.read_text(encoding="utf-8")
     assert "from fastapi import FastAPI" in content
+    assert "from fastapi.responses import HTMLResponse" in content
     assert "from adapter_fixtures import greet" in content
     assert '@app.post("/greet")' in content
+    assert '@app.get("/ui", response_class=HTMLResponse)' in content
 
 
 def test_generated_fastapi_file_can_be_imported_and_called(
@@ -81,6 +83,12 @@ def test_generated_fastapi_file_can_be_imported_and_called(
     spec.loader.exec_module(generated_module)
 
     client = TestClient(generated_module.app)
+    ui_response = client.get("/ui")
+    assert ui_response.status_code == 200
+    assert "text/html" in ui_response.headers["content-type"]
+    assert '<form id="form">' in ui_response.text
+    assert 'name="name"' in ui_response.text
+    assert 'name="excited"' in ui_response.text
     response = client.post("/greet", json={"name": "Ada", "excited": True})
 
     assert response.status_code == 200
@@ -124,6 +132,12 @@ def test_generated_fastapi_file_supports_path_upload(
     spec.loader.exec_module(generated_module)
 
     client = TestClient(generated_module.app)
+    ui_response = client.get("/ui")
+    assert ui_response.status_code == 200
+    assert 'name="upload"' in ui_response.text
+    assert 'type="file"' in ui_response.text
+    assert 'name="name"' in ui_response.text
+    assert 'name="count"' in ui_response.text
     response = client.post(
         "/ingest",
         data={"name": "Ada", "count": "3", "enabled": "true"},

@@ -1,4 +1,4 @@
-from geni import call_function, inspect_function
+from geniface import call_function, inspect_function
 
 
 def test_inspect_function_with_required_argument() -> None:

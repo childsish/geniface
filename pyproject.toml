@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "geni"
+name = "geniface"
 version = "0.1.0"
 description = "Contract-first adapters for turning Python functions into portable interfaces."
 readme = "README.md"
@@ -14,7 +14,7 @@ dependencies = []
 dev = ["pytest", "fastapi", "httpx", "python-multipart"]
 
 [tool.setuptools.packages.find]
-include = ["geni", "geni.*"]
+include = ["geniface", "geniface.*"]
 
 [tool.setuptools.package-data]
-"geni.templates" = ["*.tmpl"]
+"geniface.templates" = ["*.tmpl"]

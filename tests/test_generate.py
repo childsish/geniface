@@ -8,8 +8,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from geni.adapters.fastapi import generate as fastapi_generate
-from geni.run import load_function
+from geniface.adapters.fastapi import generate as fastapi_generate
+from geniface.run import load_function
 
 
 def _build_subprocess_env(tmp_path: Path, project_root: Path) -> dict[str, str]:
@@ -212,7 +212,7 @@ def test_generate_cli_via_subprocess(tmp_path: Path) -> None:
         [
             sys.executable,
             "-m",
-            "geni.generate",
+            "geniface.generate",
             "cli_generate_fixtures:greet",
             "--target",
             "fastapi",

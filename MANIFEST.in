@@ -1,1 +1,1 @@
-recursive-include geni/templates *.tmpl
+recursive-include geniface/templates *.tmpl

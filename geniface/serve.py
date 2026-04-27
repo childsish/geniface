@@ -11,14 +11,14 @@ from inspect import Parameter, Signature, signature
 from pathlib import Path
 from typing import Any, Callable, get_type_hints
 
-from geni.ir import call_function
-from geni.run import coerce_value, load_function, parse_cli_kwargs
-from geni.template_utils import render_template
+from geniface.ir import call_function
+from geniface.run import coerce_value, load_function, parse_cli_kwargs
+from geniface.template_utils import render_template
 
 try:
     import cgi
 except ModuleNotFoundError:
-    from geni import _cgi_compat as cgi
+    from geniface import _cgi_compat as cgi
 
 
 def parse_serve_argv(

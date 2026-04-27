@@ -5,7 +5,7 @@ from inspect import Parameter, signature
 from pathlib import Path
 from typing import Any, Callable, get_type_hints
 
-from geni.template_utils import render_template
+from geniface.template_utils import render_template
 
 
 def generate_ui(fn: Callable[..., Any]) -> str:

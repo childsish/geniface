@@ -7,7 +7,7 @@ from inspect import Parameter, Signature, getdoc, signature
 from pathlib import Path
 from typing import Any, Callable, get_type_hints
 
-from geni.ir import call_function
+from geniface.ir import call_function
 
 
 def load_function(target: str) -> Callable[..., Any]:

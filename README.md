@@ -1,6 +1,6 @@
-# geni
+# geniface
 
-`geni` turns plain Python functions into small, portable interfaces:
+`geniface` turns plain Python functions into small, portable interfaces:
 
 - a command-line runner
 - a built-in HTTP server with a browser UI
@@ -10,10 +10,10 @@ It stays close to the function signature and uses standard library tooling where
 
 ## Installation
 
-`geni` is intended to be installed from PyPI:
+`geniface` is intended to be installed from PyPI:
 
 ```bash
-pip install geni
+pip install geniface
 ```
 
 Requirements:
@@ -25,7 +25,7 @@ Optional packages:
 - For development and tests:
 
 ```bash
-pip install "geni[dev]"
+pip install "geniface[dev]"
 ```
 
 - For generated FastAPI adapters, install FastAPI and a server:
@@ -56,7 +56,7 @@ def read_file(path: Path) -> str:
 Run a function directly from the command line:
 
 ```bash
-python -m geni.run demo:greet Ada --excited true
+python -m geniface.run demo:greet Ada --excited true
 ```
 
 Output:
@@ -74,8 +74,8 @@ Rules:
 Examples:
 
 ```bash
-python -m geni.run demo:greet Ada
-python -m geni.run demo:read_file ./notes.txt
+python -m geniface.run demo:greet Ada
+python -m geniface.run demo:read_file ./notes.txt
 ```
 
 ## Serve
@@ -83,7 +83,7 @@ python -m geni.run demo:read_file ./notes.txt
 Start the built-in HTTP server:
 
 ```bash
-python -m geni.serve --host 127.0.0.1 --port 8000 demo:greet
+python -m geniface.serve --host 127.0.0.1 --port 8000 demo:greet
 ```
 
 When the server is ready it prints the bound address:
@@ -131,7 +131,7 @@ The UI:
 Generate adapter code from a function:
 
 ```bash
-python -m geni.generate demo:greet --target fastapi --output generated_api.py
+python -m geniface.generate demo:greet --target fastapi --output generated_api.py
 ```
 
 Currently supported targets:
@@ -157,6 +157,6 @@ uvicorn generated_api:app --reload
 
 ## Notes
 
-- `geni` does not validate beyond the underlying Python call and parser behavior.
+- `geniface` does not validate beyond the underlying Python call and parser behavior.
 - Uploaded files are written to temporary files and are not deleted automatically.
-- The package is licensed under the MIT License. See [LICENSE](/home/AD/chili/projects/geni/LICENSE:1).
+- The package is licensed under the MIT License. See [LICENSE](/home/AD/chili/projects/geniface/LICENSE:1).

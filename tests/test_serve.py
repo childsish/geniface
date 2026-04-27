@@ -6,9 +6,9 @@ from http.server import HTTPServer
 from pathlib import Path
 from threading import Thread
 
-import geni.serve as serve_module
-from geni.run import load_function
-from geni.serve import bind_function_args, build_handler, parse_serve_argv
+import geniface.serve as serve_module
+from geniface.run import load_function
+from geniface.serve import bind_function_args, build_handler, parse_serve_argv
 
 
 def test_parse_serve_argv_reads_server_args() -> None:

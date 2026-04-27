@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import geni.adapters.fastapi as fastapi_module
+import geniface.adapters.fastapi as fastapi_module
 
-from geni.run import load_function
-from geni.template_utils import load_template
+from geniface.run import load_function
+from geniface.template_utils import load_template
 
 
 def test_load_template_reads_packaged_resource(monkeypatch, tmp_path: Path) -> None:

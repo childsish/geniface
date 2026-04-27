@@ -4,8 +4,8 @@ import argparse
 from pathlib import Path
 from typing import Any, Callable
 
-from geni.adapters.fastapi import generate as fastapi_generate
-from geni.run import load_function
+from geniface.adapters.fastapi import generate as fastapi_generate
+from geniface.run import load_function
 
 ADAPTERS: dict[str, Callable[..., Any]] = {
     "fastapi": fastapi_generate,

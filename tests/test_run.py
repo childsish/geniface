@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import geni.run as run_module
+import geniface.run as run_module
 
-from geni.run import build_help, parse_cli_kwargs, run_cli
+from geniface.run import build_help, parse_cli_kwargs, run_cli
 
 
 def test_parse_cli_kwargs_uses_positional_required_and_optional_flags() -> None:

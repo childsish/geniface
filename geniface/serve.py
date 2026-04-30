@@ -4,6 +4,7 @@ import argparse
 import html
 import json
 import tempfile
+from enum import Enum
 from functools import partial, update_wrapper
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import BytesIO
@@ -70,18 +71,26 @@ def build_handler(fn: Callable[..., Any]) -> type[BaseHTTPRequestHandler]:
             if content_type.startswith("application/json"):
                 content_length = int(self.headers.get("Content-Length", "0"))
                 body = self.rfile.read(content_length).decode("utf-8")
-                kwargs = json.loads(body)
+                try:
+                    kwargs = _coerce_json_kwargs(json.loads(body), annotations)
+                except ValueError as exc:
+                    _send_text_response(self, 400, str(exc))
+                    return
             elif content_type.startswith("multipart/form-data"):
-                kwargs = _parse_multipart_form(
-                    self.rfile,
-                    self.headers,
-                    {
-                        "REQUEST_METHOD": "POST",
-                        "CONTENT_TYPE": content_type,
-                        "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
-                    },
-                    annotations,
-                )
+                try:
+                    kwargs = _parse_multipart_form(
+                        self.rfile,
+                        self.headers,
+                        {
+                            "REQUEST_METHOD": "POST",
+                            "CONTENT_TYPE": content_type,
+                            "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
+                        },
+                        annotations,
+                    )
+                except ValueError as exc:
+                    _send_text_response(self, 400, str(exc))
+                    return
             else:
                 self.send_error(415)
                 return
@@ -155,6 +164,9 @@ def build_ui(fn: Callable[..., Any]) -> str:
 
 
 def _build_ui_field(parameter: Parameter, annotation: Any) -> str:
+    if _is_enum_type(annotation):
+        return _build_enum_field(parameter, annotation)
+
     kind, input_type, step = _field_kind(annotation)
     label = html.escape(parameter.name)
     name = html.escape(parameter.name)
@@ -191,6 +203,28 @@ def _build_ui_field(parameter: Parameter, annotation: Any) -> str:
     )
 
 
+def _build_enum_field(parameter: Parameter, annotation: type[Enum]) -> str:
+    label = html.escape(parameter.name)
+    name = html.escape(parameter.name)
+    required = " required" if parameter.default is Parameter.empty else ""
+    default = None
+    if parameter.default is not Parameter.empty:
+        default = parameter.default.value if isinstance(parameter.default, annotation) else parameter.default
+    options = []
+    for member in annotation:
+        value = html.escape(str(member.value))
+        selected = " selected" if member.value == default else ""
+        options.append(f'    <option value="{value}"{selected}>{value}</option>\n')
+    return (
+        '<div>\n'
+        f'  <label class="form-label" for="{name}">{label}</label>\n'
+        f'  <select class="form-select" id="{name}" name="{name}" data-kind="enum"{required}>\n'
+        f'{"".join(options)}'
+        "  </select>\n"
+        "</div>\n"
+    )
+
+
 def _field_kind(annotation: Any) -> tuple[str, str, str | None]:
     if annotation is Path:
         return "path", "file", None
@@ -203,6 +237,17 @@ def _field_kind(annotation: Any) -> tuple[str, str, str | None]:
     if annotation in (Signature.empty, str):
         return "str", "text", None
     return "str", "text", None
+
+
+def _coerce_json_kwargs(raw_kwargs: dict[str, Any], annotations: dict[str, Any]) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    for name, value in raw_kwargs.items():
+        annotation = annotations.get(name, Signature.empty)
+        if _is_enum_type(annotation):
+            kwargs[name] = coerce_value(annotation, value)
+            continue
+        kwargs[name] = value
+    return kwargs
 
 
 def _parse_multipart_form(
@@ -229,6 +274,26 @@ def _parse_multipart_form(
         kwargs[field.name] = coerce_value(annotation, field.value)
 
     return kwargs
+
+
+def _send_text_response(
+    handler: BaseHTTPRequestHandler,
+    status: int,
+    message: str,
+) -> None:
+    payload = message.encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "text/plain; charset=utf-8")
+    handler.send_header("Content-Length", str(len(payload)))
+    handler.end_headers()
+    handler.wfile.write(payload)
+
+
+def _is_enum_type(annotation: Any) -> bool:
+    try:
+        return issubclass(annotation, Enum)
+    except TypeError:
+        return False
 
 
 def run_http_server(

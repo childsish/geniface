@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import http.client
 import json
+from enum import Enum
 from http.server import HTTPServer
 from pathlib import Path
 from threading import Thread
 
 import geniface.serve as serve_module
 from geniface.run import load_function
-from geniface.serve import bind_function_args, build_handler, parse_serve_argv
+from geniface.serve import bind_function_args, build_handler, build_ui, parse_serve_argv
+
+
+class Mode(Enum):
+    FAST = "fast"
+    ACCURATE = "accurate"
 
 
 def test_parse_serve_argv_reads_server_args() -> None:
@@ -94,6 +100,19 @@ def test_ui_returns_html_with_function_name() -> None:
         thread.join()
 
 
+def test_ui_renders_enum_dropdown_with_default() -> None:
+    def process(mode: Mode = Mode.ACCURATE) -> str:
+        return mode.value
+
+    body = build_ui(process)
+
+    assert 'name="mode"' in body
+    assert "<select" in body
+    assert 'data-kind="enum"' in body
+    assert '<option value="fast">fast</option>' in body
+    assert '<option value="accurate" selected>accurate</option>' in body
+
+
 def test_ui_api_submission_returns_expected_result() -> None:
     def compute(name: str, count: int, ratio: float, enabled: bool) -> str:
         return f"{name}:{count}:{ratio}:{enabled}"
@@ -120,6 +139,54 @@ def test_ui_api_submission_returns_expected_result() -> None:
 
         assert response.status == 200
         assert body == {"result": "Ada:3:1.5:True"}
+    finally:
+        server.shutdown()
+        thread.join()
+
+
+def test_json_request_coerces_enum_value() -> None:
+    def process(mode: Mode) -> str:
+        return f"{isinstance(mode, Mode)}:{mode.value}"
+
+    server, thread = _start_server(process)
+
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
+        connection.request(
+            "POST",
+            "/process",
+            body=json.dumps({"mode": "fast"}),
+            headers={"Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        body = json.loads(response.read())
+
+        assert response.status == 200
+        assert body == {"result": "True:fast"}
+    finally:
+        server.shutdown()
+        thread.join()
+
+
+def test_json_request_rejects_invalid_enum_value() -> None:
+    def process(mode: Mode) -> str:
+        return mode.value
+
+    server, thread = _start_server(process)
+
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
+        connection.request(
+            "POST",
+            "/process",
+            body=json.dumps({"mode": "slow"}),
+            headers={"Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        body = response.read().decode("utf-8")
+
+        assert response.status == 400
+        assert "Invalid value 'slow'. Allowed: ['fast', 'accurate']" in body
     finally:
         server.shutdown()
         thread.join()
@@ -213,6 +280,41 @@ def test_multipart_upload_maps_file_to_path() -> None:
 
         assert response.status == 200
         assert payload == {"result": "True:hello file:memo"}
+    finally:
+        server.shutdown()
+        thread.join()
+
+
+def test_multipart_upload_coerces_enum_with_file() -> None:
+    def read_upload(upload: Path, mode: Mode) -> str:
+        return f"{isinstance(mode, Mode)}:{mode.value}:{upload.read_text(encoding='utf-8')}"
+
+    server, thread = _start_server(read_upload)
+
+    try:
+        boundary = "test-boundary"
+        body = (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="mode"\r\n\r\n'
+            "fast\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="upload"; filename="sample.txt"\r\n'
+            "Content-Type: text/plain\r\n\r\n"
+            "hello file\r\n"
+            f"--{boundary}--\r\n"
+        ).encode("utf-8")
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
+        connection.request(
+            "POST",
+            "/read_upload",
+            body=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+        response = connection.getresponse()
+        payload = json.loads(response.read())
+
+        assert response.status == 200
+        assert payload == {"result": "True:fast:hello file"}
     finally:
         server.shutdown()
         thread.join()

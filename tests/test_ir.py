@@ -1,4 +1,11 @@
+from enum import Enum
+
 from geniface import call_function, inspect_function
+
+
+class Mode(Enum):
+    FAST = "fast"
+    ACCURATE = "accurate"
 
 
 def test_inspect_function_with_required_argument() -> None:
@@ -39,6 +46,15 @@ def test_inspect_function_with_return_type() -> None:
     assert spec.output.required is True
     assert spec.output.default is None
     assert spec.fn is enabled
+
+
+def test_inspect_function_maps_enum_argument_to_string() -> None:
+    def process(mode: Mode) -> str:
+        return mode.value
+
+    spec = inspect_function(process)
+
+    assert spec.inputs[0].type == "string"
 
 
 def test_call_function_with_simple_keyword_arguments() -> None:

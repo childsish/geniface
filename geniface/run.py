@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from enum import Enum
 from importlib import import_module
 from inspect import Parameter, Signature, getdoc, signature
 from pathlib import Path
@@ -24,7 +25,9 @@ def parse_cli_kwargs(fn: Callable[..., Any], argv: list[str]) -> dict[str, Any]:
     return {name: value for name, value in vars(namespace).items() if value is not None}
 
 
-def coerce_value(annotation: Any, value: str) -> Any:
+def coerce_value(annotation: Any, value: Any) -> Any:
+    if _is_enum_type(annotation):
+        return _coerce_enum_value(annotation, value)
     return _parser_type(annotation)(value)
 
 
@@ -87,16 +90,22 @@ def build_cli_parser(
     sig = signature(fn)
 
     for name, parameter in sig.parameters.items():
-        argument_type = _parser_type(annotations.get(name, parameter.annotation))
-        if parameter.default is Parameter.empty:
+        annotation = annotations.get(name, parameter.annotation)
+        argument_type = _parser_type(annotation)
+        if parameter.default is Parameter.empty and not _is_enum_type(annotation):
             parser.add_argument(name, type=argument_type)
         else:
-            parser.add_argument(f"--{name}", dest=name, type=argument_type)
+            options: dict[str, Any] = {"dest": name, "type": argument_type}
+            if parameter.default is Parameter.empty:
+                options["required"] = True
+            parser.add_argument(f"--{name}", **options)
 
     return parser
 
 
 def _parser_type(annotation: Any) -> Callable[[str], Any]:
+    if _is_enum_type(annotation):
+        return _enum_parser(annotation)
     if annotation in (Signature.empty, str):
         return str
     if annotation is Path:
@@ -110,7 +119,34 @@ def _parser_type(annotation: Any) -> Callable[[str], Any]:
     return str
 
 
+def _enum_parser(annotation: type[Enum]) -> Callable[[str], Any]:
+    def parse(value: str) -> Any:
+        try:
+            return _coerce_enum_value(annotation, value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(str(exc)) from exc
+
+    return parse
+
+
+def _coerce_enum_value(annotation: type[Enum], value: Any) -> Enum:
+    try:
+        return annotation(value)
+    except ValueError as exc:
+        allowed = [member.value for member in annotation]
+        raise ValueError(f"Invalid value {value!r}. Allowed: {allowed}") from exc
+
+
+def _is_enum_type(annotation: Any) -> bool:
+    try:
+        return issubclass(annotation, Enum)
+    except TypeError:
+        return False
+
+
 def _parse_bool(value: str) -> bool:
+    if isinstance(value, bool):
+        return value
     normalized = value.lower()
     if normalized in {"1", "true", "yes", "on"}:
         return True

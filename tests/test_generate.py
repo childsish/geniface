@@ -191,6 +191,106 @@ def test_generated_fastapi_file_supports_path_upload(
     assert response.json() == {"result": "Ada:3:True:hello file"}
 
 
+def test_generated_fastapi_file_supports_enum_json(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    module = tmp_path / "enum_json_fixtures.py"
+    module.write_text(
+        "\n".join(
+            [
+                "from enum import Enum",
+                "",
+                "class Mode(Enum):",
+                '    FAST = "fast"',
+                '    ACCURATE = "accurate"',
+                "",
+                "def process(mode: Mode) -> str:",
+                '    return f"{isinstance(mode, Mode)}:{mode.value}"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    fn = load_function("enum_json_fixtures:process")
+    output_path = tmp_path / "generated_enum_json_app.py"
+    fastapi_generate(fn, output_path)
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "from fastapi import Body" in content
+    assert "from enum_json_fixtures import Mode" in content
+    assert "mode: Mode = Body(..., embed=True)" in content
+
+    spec = importlib.util.spec_from_file_location("generated_enum_json_app", output_path)
+    assert spec is not None
+    assert spec.loader is not None
+    generated_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generated_module)
+
+    client = TestClient(generated_module.app)
+    response = client.post("/process", json={"mode": "fast"})
+    invalid_response = client.post("/process", json={"mode": "slow"})
+
+    assert response.status_code == 200
+    assert response.json() == {"result": "True:fast"}
+    assert invalid_response.status_code == 422
+
+
+def test_generated_fastapi_file_supports_enum_form_with_upload(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    module = tmp_path / "enum_upload_fixtures.py"
+    module.write_text(
+        "\n".join(
+            [
+                "from enum import Enum",
+                "from pathlib import Path",
+                "",
+                "class Mode(Enum):",
+                '    FAST = "fast"',
+                '    ACCURATE = "accurate"',
+                "",
+                "def ingest(upload: Path, mode: Mode) -> str:",
+                "    content = upload.read_text(encoding='utf-8')",
+                '    return f"{isinstance(mode, Mode)}:{mode.value}:{content}"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    fn = load_function("enum_upload_fixtures:ingest")
+    output_path = tmp_path / "generated_enum_upload_app.py"
+    fastapi_generate(fn, output_path)
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "from enum_upload_fixtures import Mode" in content
+    assert "mode: Mode = Form(...)" in content
+    assert '<select class="form-select" id="mode" name="mode" data-kind="enum" required>' in content
+    assert '<option value="fast">fast</option>' in content
+    assert '<option value="accurate">accurate</option>' in content
+
+    spec = importlib.util.spec_from_file_location("generated_enum_upload_app", output_path)
+    assert spec is not None
+    assert spec.loader is not None
+    generated_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generated_module)
+
+    client = TestClient(generated_module.app)
+    response = client.post(
+        "/ingest",
+        data={"mode": "fast"},
+        files={"upload": ("sample.txt", b"hello file", "text/plain")},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"result": "True:fast:hello file"}
+
+
 def test_generate_cli_via_subprocess(tmp_path: Path) -> None:
     module = tmp_path / "cli_generate_fixtures.py"
     module.write_text(

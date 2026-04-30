@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
+
+import pytest
 
 import geniface.run as run_module
 
-from geniface.run import build_help, parse_cli_kwargs, run_cli
+from geniface.run import build_help, coerce_value, parse_cli_kwargs, run_cli
+
+
+class Mode(Enum):
+    FAST = "fast"
+    ACCURATE = "accurate"
 
 
 def test_parse_cli_kwargs_uses_positional_required_and_optional_flags() -> None:
@@ -52,6 +60,32 @@ def test_parse_cli_kwargs_supports_path_type(tmp_path: Path) -> None:
     kwargs = parse_cli_kwargs(sample, [str(file_path)])
 
     assert kwargs == {"path": file_path}
+
+
+def test_parse_cli_kwargs_supports_enum_type() -> None:
+    def sample(mode: Mode) -> None:
+        return None
+
+    kwargs = parse_cli_kwargs(sample, ["--mode", "fast"])
+
+    assert kwargs == {"mode": Mode.FAST}
+
+
+def test_parse_cli_kwargs_reports_allowed_enum_values(capsys) -> None:
+    def sample(mode: Mode) -> None:
+        return None
+
+    with pytest.raises(SystemExit):
+        parse_cli_kwargs(sample, ["--mode", "slow"])
+
+    captured = capsys.readouterr()
+
+    assert "Invalid value 'slow'. Allowed: ['fast', 'accurate']" in captured.err
+
+
+def test_coerce_value_reports_allowed_enum_values() -> None:
+    with pytest.raises(ValueError, match="Invalid value 'slow'"):
+        coerce_value(Mode, "slow")
 
 
 def test_build_help_uses_docstring() -> None:

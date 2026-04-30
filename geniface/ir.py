@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from inspect import Parameter, Signature, signature
 from typing import Any, Callable
 
@@ -46,6 +47,8 @@ def inspect_function(fn: Callable[..., Any]) -> FunctionSpec:
 
 
 def _map_type(annotation: Any) -> str:
+    if _is_enum_type(annotation):
+        return "string"
     if annotation is Signature.empty:
         return "object"
     if annotation is str:
@@ -57,3 +60,10 @@ def _map_type(annotation: Any) -> str:
     if annotation is bool:
         return "boolean"
     return "object"
+
+
+def _is_enum_type(annotation: Any) -> bool:
+    try:
+        return issubclass(annotation, Enum)
+    except TypeError:
+        return False

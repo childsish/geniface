@@ -6,7 +6,7 @@ from enum import Enum
 from importlib import import_module
 from inspect import Parameter, Signature, getdoc, signature
 from pathlib import Path
-from typing import Any, Callable, get_type_hints
+from typing import Any, Callable, get_args, get_type_hints
 
 from geniface.ir import call_function
 
@@ -108,7 +108,7 @@ def _parser_type(annotation: Any) -> Callable[[str], Any]:
         return _enum_parser(annotation)
     if annotation in (Signature.empty, str):
         return str
-    if annotation is Path:
+    if _is_path_type(annotation):
         return Path
     if annotation is int:
         return int
@@ -142,6 +142,11 @@ def _is_enum_type(annotation: Any) -> bool:
         return issubclass(annotation, Enum)
     except TypeError:
         return False
+
+
+def _is_path_type(annotation: Any) -> bool:
+    args = get_args(annotation)
+    return annotation is Path or (Path in args and type(None) in args)
 
 
 def _parse_bool(value: str) -> bool:

@@ -191,6 +191,59 @@ def test_generated_fastapi_file_supports_path_upload(
     assert response.json() == {"result": "Ada:3:True:hello file"}
 
 
+def test_generated_fastapi_file_supports_optional_path_upload(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    module = tmp_path / "optional_upload_fixtures.py"
+    module.write_text(
+        "\n".join(
+            [
+                "from pathlib import Path",
+                "",
+                "def ingest(upload: Path = None) -> str:",
+                "    if upload is None:",
+                '        return "missing"',
+                "    content = upload.read_text(encoding='utf-8')",
+                '    return f"uploaded:{content}"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    fn = load_function("optional_upload_fixtures:ingest")
+    output_path = tmp_path / "generated_optional_upload_app.py"
+    fastapi_generate(fn, output_path)
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "upload: UploadFile | None = File(None)" in content
+    assert "if upload is not None:" in content
+
+    spec = importlib.util.spec_from_file_location("generated_optional_upload_app", output_path)
+    assert spec is not None
+    assert spec.loader is not None
+    generated_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generated_module)
+
+    client = TestClient(generated_module.app)
+    ui_response = client.get("/ui")
+    omitted_response = client.post("/ingest", files={})
+    upload_response = client.post(
+        "/ingest",
+        files={"upload": ("sample.txt", b"hello file", "text/plain")},
+    )
+
+    assert ui_response.status_code == 200
+    assert 'name="upload"' in ui_response.text
+    assert 'type="file"' in ui_response.text
+    assert omitted_response.status_code == 200
+    assert omitted_response.json() == {"result": "missing"}
+    assert upload_response.status_code == 200
+    assert upload_response.json() == {"result": "uploaded:hello file"}
+
+
 def test_generated_fastapi_file_supports_enum_json(
     tmp_path: Path,
     monkeypatch,

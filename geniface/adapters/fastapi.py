@@ -4,7 +4,7 @@ import html
 from enum import Enum
 from inspect import Parameter, signature
 from pathlib import Path
-from typing import Any, Callable, get_type_hints
+from typing import Any, Callable, get_args, get_type_hints
 
 from geniface.template_utils import render_template
 
@@ -17,7 +17,7 @@ def generate_ui(fn: Callable[..., Any]) -> str:
     for parameter in signature(fn).parameters.values():
         annotation = annotations.get(parameter.name, parameter.annotation)
         fields.append(_build_ui_field(parameter, annotation))
-        has_file_input = has_file_input or annotation is Path
+        has_file_input = has_file_input or _is_path_type(annotation)
 
     return render_template(
         "fastapi_ui.html.tmpl",
@@ -38,25 +38,18 @@ def generate(fn: Callable[..., Any], output_path: Path) -> None:
     ui_html = generate_ui(fn)
     enum_imports = _enum_imports(parameters, annotations)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    if any(annotations.get(parameter.name, parameter.annotation) is Path for parameter in parameters):
+    if any(_is_path_type(annotations.get(parameter.name, parameter.annotation)) for parameter in parameters):
         route_signature = []
         route_body = []
         call_arguments = []
 
         for parameter in parameters:
             annotation = annotations.get(parameter.name, parameter.annotation)
-            if annotation is Path:
-                route_signature.append(f"{parameter.name}: UploadFile = File(...)")
-                route_body.extend(
-                    [
-                        f"    {parameter.name}_temp = tempfile.NamedTemporaryFile(delete=False)",
-                        "    try:",
-                        f"        {parameter.name}_temp.write({parameter.name}.file.read())",
-                        "    finally:",
-                        f"        {parameter.name}_temp.close()",
-                        f"    {parameter.name}_path = Path({parameter.name}_temp.name)",
-                    ]
-                )
+            if _is_path_type(annotation):
+                default = "..." if parameter.default is Parameter.empty else "None"
+                upload_type = "UploadFile" if parameter.default is Parameter.empty else "UploadFile | None"
+                route_signature.append(f"{parameter.name}: {upload_type} = File({default})")
+                route_body.extend(_path_route_body(parameter))
                 call_arguments.append(f"{parameter.name}={parameter.name}_path")
                 continue
 
@@ -164,7 +157,7 @@ def _build_enum_field(parameter: Parameter, annotation: type[Enum]) -> str:
 
 
 def _field_kind(annotation: Any) -> tuple[str, str, str | None]:
-    if annotation is Path:
+    if _is_path_type(annotation):
         return "path", "file", None
     if annotation is bool:
         return "bool", "checkbox", None
@@ -184,7 +177,7 @@ def _type_name(annotation: Any) -> str:
         return "float"
     if annotation is bool:
         return "bool"
-    if annotation is Path:
+    if _is_path_type(annotation):
         return "Path"
     return "str"
 
@@ -227,8 +220,41 @@ def _enum_imports(parameters: list[Parameter], annotations: dict[str, Any]) -> s
     return "\n" + "\n".join(lines) if lines else ""
 
 
+def _path_route_body(parameter: Parameter) -> list[str]:
+    if parameter.default is Parameter.empty:
+        return [
+            f"    {parameter.name}_temp = tempfile.NamedTemporaryFile(delete=False)",
+            "    try:",
+            f"        {parameter.name}_temp.write({parameter.name}.file.read())",
+            "    finally:",
+            f"        {parameter.name}_temp.close()",
+            f"    {parameter.name}_path = Path({parameter.name}_temp.name)",
+        ]
+    return [
+        f"    {parameter.name}_path = {_path_default_expr(parameter)}",
+        f"    if {parameter.name} is not None:",
+        f"        {parameter.name}_temp = tempfile.NamedTemporaryFile(delete=False)",
+        "        try:",
+        f"            {parameter.name}_temp.write({parameter.name}.file.read())",
+        "        finally:",
+        f"            {parameter.name}_temp.close()",
+        f"        {parameter.name}_path = Path({parameter.name}_temp.name)",
+    ]
+
+
+def _path_default_expr(parameter: Parameter) -> str:
+    if parameter.default is None:
+        return "None"
+    return f"Path({str(parameter.default)!r})"
+
+
 def _is_enum_type(annotation: Any) -> bool:
     try:
         return issubclass(annotation, Enum)
     except TypeError:
         return False
+
+
+def _is_path_type(annotation: Any) -> bool:
+    args = get_args(annotation)
+    return annotation is Path or (Path in args and type(None) in args)

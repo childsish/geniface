@@ -62,6 +62,16 @@ def test_parse_cli_kwargs_supports_path_type(tmp_path: Path) -> None:
     assert kwargs == {"path": file_path}
 
 
+def test_parse_cli_kwargs_supports_optional_path_type(tmp_path: Path) -> None:
+    def sample(path: Path | None = None) -> None:
+        return None
+
+    file_path = tmp_path / "input.txt"
+    kwargs = parse_cli_kwargs(sample, ["--path", str(file_path)])
+
+    assert kwargs == {"path": file_path}
+
+
 def test_parse_cli_kwargs_supports_enum_type() -> None:
     def sample(mode: Mode) -> None:
         return None

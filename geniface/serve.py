@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import BytesIO
 from inspect import Parameter, Signature, signature
 from pathlib import Path
-from typing import Any, Callable, get_type_hints
+from typing import Any, Callable, get_args, get_type_hints
 
 from geniface.ir import call_function
 from geniface.run import coerce_value, load_function, parse_cli_kwargs
@@ -150,7 +150,7 @@ def build_ui(fn: Callable[..., Any]) -> str:
     for parameter in signature(fn).parameters.values():
         annotation = annotations.get(parameter.name, parameter.annotation)
         fields.append(_build_ui_field(parameter, annotation))
-        has_file_input = has_file_input or annotation is Path
+        has_file_input = has_file_input or _is_path_type(annotation)
 
     return render_template(
         "fastapi_ui.html.tmpl",
@@ -226,7 +226,7 @@ def _build_enum_field(parameter: Parameter, annotation: type[Enum]) -> str:
 
 
 def _field_kind(annotation: Any) -> tuple[str, str, str | None]:
-    if annotation is Path:
+    if _is_path_type(annotation):
         return "path", "file", None
     if annotation is int:
         return "int", "number", "1"
@@ -294,6 +294,11 @@ def _is_enum_type(annotation: Any) -> bool:
         return issubclass(annotation, Enum)
     except TypeError:
         return False
+
+
+def _is_path_type(annotation: Any) -> bool:
+    args = get_args(annotation)
+    return annotation is Path or (Path in args and type(None) in args)
 
 
 def run_http_server(

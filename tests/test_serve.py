@@ -100,6 +100,19 @@ def test_ui_returns_html_with_function_name() -> None:
         thread.join()
 
 
+def test_ui_renders_optional_path_as_file_input() -> None:
+    def read_upload(upload: Path | None = None) -> str:
+        return "missing" if upload is None else upload.read_text(encoding="utf-8")
+
+    body = build_ui(read_upload)
+
+    assert 'name="upload"' in body
+    assert 'type="file"' in body
+    assert 'data-kind="path"' in body
+    assert 'name="upload" type="file" data-kind="path" required' not in body
+    assert "const useFormData = true;" in body
+
+
 def test_ui_renders_enum_dropdown_with_default() -> None:
     def process(mode: Mode = Mode.ACCURATE) -> str:
         return mode.value
@@ -280,6 +293,32 @@ def test_multipart_upload_maps_file_to_path() -> None:
 
         assert response.status == 200
         assert payload == {"result": "True:hello file:memo"}
+    finally:
+        server.shutdown()
+        thread.join()
+
+
+def test_multipart_omitted_optional_path_uses_function_default() -> None:
+    def read_upload(upload: Path | None = None) -> str:
+        return "missing" if upload is None else upload.read_text(encoding="utf-8")
+
+    server, thread = _start_server(read_upload)
+
+    try:
+        boundary = "test-boundary"
+        body = f"--{boundary}--\r\n".encode("utf-8")
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
+        connection.request(
+            "POST",
+            "/read_upload",
+            body=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+        response = connection.getresponse()
+        payload = json.loads(response.read())
+
+        assert response.status == 200
+        assert payload == {"result": "missing"}
     finally:
         server.shutdown()
         thread.join()
